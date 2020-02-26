@@ -48,10 +48,10 @@ data Stmt = Bind Var Expr
 data Type = TInt | TBool
   deriving (Eq,Show)
 
--- | Abstract syntax of functions. Work in progress -- Isaac
+-- | Abstract syntax of functions.
 
--- data Func = F String [String] [Stmt] 
---   deriving (Eq,Show)
+data Func = F String [String] [Stmt] 
+  deriving (Eq,Show)
 
 -- | Abstract syntax of declarations.
 --
