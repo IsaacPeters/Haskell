@@ -3,6 +3,7 @@ module Lang where
   
 import Data.Map (Map,fromList,lookup,insert)
 import Data.Maybe (fromJust)
+import Data.Char
 import Prelude hiding (lookup)
 
 
@@ -39,6 +40,17 @@ data Stmt = Bind Var Expr
           | If Expr Stmt Stmt
           | While Expr Stmt
           | Block [Stmt]
+  deriving (Eq,Show)
+
+-- | Abstract syntax of strings
+--
+--    str ::= string
+--          | string ++ string
+--          | toUpper string
+
+data Str = MyStr String
+          | Concat Str Str
+          | Upper Str
   deriving (Eq,Show)
 
 -- | Abstract syntax of types.
@@ -235,3 +247,19 @@ evalProg (P ds s) = evalStmt s m
 runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
+
+-- Good examples for custom Str string data type
+myStr1 :: Str
+myStr1 = MyStr "hi world"
+
+myStr2 :: Str
+myStr2 = Concat (MyStr "hi ") (MyStr "world")
+
+myStr3 :: Str
+myStr3 = Upper (MyStr "hello")
+
+-- Semantics for using the Str data type
+evalString :: Str -> String
+evalString (MyStr s)      = s
+evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
+evalString (Upper s)      = map toUpper (evalString s)
