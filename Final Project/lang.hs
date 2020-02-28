@@ -248,6 +248,7 @@ runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
 
+-- Good examples for custom Str string data type
 myStr1 :: Str
 myStr1 = MyStr "hi world"
 
@@ -257,6 +258,7 @@ myStr2 = Concat (MyStr "hi ") (MyStr "world")
 myStr3 :: Str
 myStr3 = Upper (MyStr "hello")
 
+-- Semantics for using the Str data type
 evalString :: Str -> String
 evalString (MyStr s)      = s
 evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
