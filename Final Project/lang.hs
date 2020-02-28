@@ -19,12 +19,18 @@ type Var = String
 --     expr  ::=  int
 --            |   expr + expr
 --            |   expr ≤ expr
+--            |   expr ≥ expr
 --            |   `not` expr
 --            |   var
 --
 data Expr = Lit Int        -- literal integer
           | Add Expr Expr  -- integer addition
+          | Sub Expr Expr
           | LTE Expr Expr  -- less than or equal to
+          | GTE Expr Expr  -- greater than or equal to
+          | EQL Expr Expr
+          | LWR Expr Expr
+          | GTR Expr Expr
           | Not Expr       -- boolean negation
           | Ref Var        -- variable reference
   deriving (Eq,Show)
@@ -78,7 +84,7 @@ type Decl = (Var,Type)
 data Prog = P [Decl] Stmt
   deriving (Eq,Show)
 
--- | Example program: sum all of the numbers from 1 to 100.
+-- | Example good program: sum all of the numbers from 1 to 100.
 --
 --     sum : int
 --     n : int
@@ -90,26 +96,26 @@ data Prog = P [Decl] Stmt
 --         n := n + 1
 --       }
 --     }
-ex1 :: Prog
-ex1 = P [("sum",TInt),("n",TInt)]
-      (Block [
-        Bind "sum" (Lit 0),
-        Bind "n" (Lit 1),
-        While (LTE (Ref "n") (Lit 100))
-        (Block [
-          Bind "sum" (Add (Ref "sum") (Ref "n")),
-          Bind "n" (Add (Ref "n") (Lit 1))
-        ])
-      ])
+-- >>> ex1 :: Prog
+--  ex1 = P [("sum",TInt),("n",TInt)]
+--      (Block [
+--         Bind "sum" (Lit 0),
+--         Bind "n" (Lit 1),
+--         While (LTE (Ref "n") (Lit 100))
+--         (Block [
+--           Bind "sum" (Add (Ref "sum") (Ref "n")),
+--           Bind "n" (Add (Ref "n") (Lit 1))
+--         ])
+--       ])
 
--- | Example program with a type error.
+-- | Example bad program with a type error.
 --
 --     x : int
 --     begin
 --       x := 3 <= 4
 --
-ex2 :: Prog
-ex2 = P [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
+-- ex2 :: Prog
+-- P [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
 
 
 --
@@ -131,7 +137,22 @@ typeExpr (Lit _)   _ = Just TInt
 typeExpr (Add l r) m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TInt
                          _                      -> Nothing
+typeExpr (Sub l r) m = case (typeExpr l m, typeExpr r m) of
+                         (Just TInt, Just TInt) -> Just TInt
+                         _                      -> Nothing
 typeExpr (LTE l r) m = case (typeExpr l m, typeExpr r m) of
+                         (Just TInt, Just TInt) -> Just TBool
+                         _                      -> Nothing
+typeExpr (GTE l r) m = case (typeExpr l m, typeExpr r m) of
+                         (Just TInt, Just TInt) -> Just TBool
+                         _                      -> Nothing
+typeExpr (EQL l r) m = case (typeExpr l m, typeExpr r m) of
+                         (Just TInt, Just TInt) -> Just TBool
+                         _                      -> Nothing
+typeExpr (LWR l r) m = case (typeExpr l m, typeExpr r m) of
+                         (Just TInt, Just TInt) -> Just TBool
+                         _                      -> Nothing
+typeExpr (GTR l r) m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
 typeExpr (Not e)   m = case typeExpr e m of
@@ -189,10 +210,17 @@ type Val = Either Int Bool
 --   Since expressions can refer to variables but not change them, the
 --   environment is read-only (i.e. it's an input but not an output of the
 --   function).
+
+
 evalExpr :: Expr -> Env Val -> Val
 evalExpr (Lit i)   _ = Left i
 evalExpr (Add l r) m = Left (evalInt l m + evalInt r m)
+evalExpr (Sub l r) m = Left (evalInt l m + evalInt r m)
 evalExpr (LTE l r) m = Right (evalInt l m <= evalInt r m)
+evalExpr (GTE l r) m = Right (evalInt l m >= evalInt r m)
+evalExpr (EQL l r) m = Right (evalInt l m == evalInt r m)
+evalExpr (LWR l r) m = Right (evalInt l m < evalInt r m)
+evalExpr (GTR l r) m = Right (evalInt l m < evalInt r m)
 evalExpr (Not e)   m = Right (not (evalBool e m))
 evalExpr (Ref x)   m = case lookup x m of
                          Just v  -> v
