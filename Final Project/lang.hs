@@ -24,9 +24,11 @@ type FName = String
 --
 data Expr = Lit Int        -- literal integer
           | Add Expr Expr  -- integer addition
+          | Mul Expr Expr  -- integer addition
           | LTE Expr Expr  -- less than or equal to
           | Not Expr       -- boolean negation
           | Ref Var        -- variable reference
+          | Call FName [Var] -- function call
   deriving (Eq,Show)
 
 -- | Abstract syntax of statements.
@@ -40,11 +42,9 @@ data Stmt = Bind Var Expr
           | If Expr Stmt Stmt
           | While Expr Stmt
           | Block [Stmt]
-          | Call FName [Var]
   deriving (Eq,Show)
 
 -- | Abstract syntax of functions.
-
 data Func = F FName [Decl] Stmt
   deriving (Eq,Show)
 
@@ -82,9 +82,9 @@ data Prog = P [Func] [Decl] Stmt
 --     }
 ex1 :: Prog
 ex1 = P 
-      [F "square" [("x", TInt)] 
+      [F "square" [("return", TInt)] 
       (Block [
-        Bind "x" (Add (Ref "x") (Ref "x"))
+        Bind "return" (Mul (Ref "return") (Ref "return"))
       ])] 
 
       [("sum",TInt),("n",TInt)]
@@ -96,6 +96,19 @@ ex1 = P
           Bind "sum" (Add (Ref "sum") (Ref "n")),
           Bind "n" (Add (Ref "n") (Lit 1))
         ])
+      ])
+
+ex3 :: Prog
+ex3 = P 
+      [F "square" [("return", TInt)] 
+      (Block [
+        Bind "return" (Mul (Ref "return") (Ref "return"))
+      ])] 
+
+      [("n",TInt)]
+      (Block [
+        Bind "n" (Lit 4),
+        Bind "n" (Call "square" ["n"])
       ])
 
 -- | Example program with a type error.
@@ -130,6 +143,9 @@ typeExpr (Lit _)   _ _ = Just TInt
 typeExpr (Add l r) f m = case (typeExpr l f m, typeExpr r f m) of
                          (Just TInt, Just TInt) -> Just TInt
                          _                      -> Nothing
+typeExpr (Mul l r) f m = case (typeExpr l f m, typeExpr r f m) of
+                         (Just TInt, Just TInt) -> Just TInt
+                         _                      -> Nothing
 typeExpr (LTE l r) f m = case (typeExpr l f m, typeExpr r f m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
@@ -137,6 +153,7 @@ typeExpr (Not e)   f m = case typeExpr e f m of
                          Just TBool -> Just TBool
                          _          -> Nothing
 typeExpr (Ref v)   f m = lookup v m
+typeExpr (Call r vs)  f m = Just TInt
 
 
 -- | Type checking statements. Note that the return type here is just a
@@ -164,7 +181,7 @@ typeStmt (While c sb) f m = case typeExpr c f m of
                             Just TBool -> typeStmt sb f m
                             _ -> False
 typeStmt (Block ss)   f m = all (\s -> typeStmt s f m) ss
-typeStmt (Call n vs)  f m = False
+-- typeStmt (Call n vs)  f m = False
 
 
 -- | Type checking programs. The 'fromList' function is from the
@@ -192,11 +209,40 @@ type Val = Either Int Bool
 evalExpr :: Expr -> [Func] -> Env Val -> Val
 evalExpr (Lit i)   _ _ = Left i
 evalExpr (Add l r) f m = Left (evalInt l f m + evalInt r f m)
+evalExpr (Mul l r) f m = Left (evalInt l f m * evalInt r f m)
 evalExpr (LTE l r) f m = Right (evalInt l f m <= evalInt r f m)
 evalExpr (Not e)   f m = Right (not (evalBool e f m))
 evalExpr (Ref x)   f m = case lookup x m of
                          Just v  -> v
                          Nothing -> error "internal error: undefined variable"
+evalExpr (Call r vs)  f m = evalFunc r vs f m
+
+-- data Func = F FName [Decl] Stmt
+--   deriving (Eq,Show)
+findFunc :: FName -> [Func] -> Maybe Func
+findFunc n [] = Nothing
+findFunc n ((F n' ds s):nx) = if n == n'
+                              then Just (F n' ds s)
+                              else findFunc n nx
+
+listConv :: [Maybe Val] -> Maybe [Val]
+listConv [] = Just []
+listConv (Nothing:n) = Nothing
+listConv ((Just c):n) = case listConv n of
+                          Just vs -> Just (c:vs)
+                          Nothing -> Nothing
+
+-- type Decl = (Var,Type)
+-- type Env a = Map Var a
+evalFunc :: FName -> [Var] -> [Func] -> Env Val -> Val
+evalFunc fn vs f m = case findFunc fn f of
+                      Nothing -> error "internal error: function not defined"
+                      Just (F _ ds s) -> case lookup "return" (evalStmt s f mf) of
+                        Just r -> r
+                        Nothing -> error "internal error: function 'return' var not defined"
+                        where mf = case listConv (map (\v -> lookup v m) vs) of
+                                    Just vl  -> fromList (zipWith (\(a,b) c -> (a, c)) ds vl)
+                                    Nothing  -> error "internal error: on function call" 
 
 -- | Helper function to evaluate an expression to an integer. Note that
 --   in all cases, we should only get an "internal error" if we try to
@@ -226,7 +272,6 @@ evalStmt (While c sb) f m = if evalBool c f m
                           then evalStmt (While c sb) f (evalStmt sb f m)
                           else m
 evalStmt (Block ss)   f m = evalStmts ss f m
-evalStmt (Call r vs)  f m = error "cannot run function atm"
 
 -- | Helper function to evaluate a list of statements. We could also
 --   have used 'foldl' here.
