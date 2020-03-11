@@ -1,4 +1,3 @@
--- | A single register imperative language.
 module Lang where
   
 import Data.Map (Map,fromList,lookup,insert)
@@ -13,6 +12,7 @@ import Prelude hiding (lookup)
 
 -- | Variables.
 type Var = String
+type FName = String
 
 -- | Abstract syntax of expressions.
 --
@@ -22,9 +22,11 @@ type Var = String
 --            |   expr ≥ expr
 --            |   `not` expr
 --            |   var
+--            
 --
 data Expr = Lit Int        -- literal integer
           | Add Expr Expr  -- integer addition
+          | Mul Expr Expr 
           | Sub Expr Expr
           | LTE Expr Expr  -- less than or equal to
           | GTE Expr Expr  -- greater than or equal to
@@ -33,6 +35,7 @@ data Expr = Lit Int        -- literal integer
           | GTR Expr Expr
           | Not Expr       -- boolean negation
           | Ref Var        -- variable reference
+          | Call FName [Var] -- function call
   deriving (Eq,Show)
 
 -- | Abstract syntax of statements.
@@ -47,6 +50,9 @@ data Stmt = Bind Var Expr
           | While Expr Stmt
           | Block [Stmt]
   deriving (Eq,Show)
+
+-- | Abstract syntax of functions.
+data Func = F FName [Decl] Stmt
 
 -- | Abstract syntax of strings
 --
@@ -66,11 +72,6 @@ data Str = MyStr String
 data Type = TInt | TBool
   deriving (Eq,Show)
 
--- | Abstract syntax of functions. Work in progress -- Isaac
-
--- data Func = F String [String] [Stmt] 
---   deriving (Eq,Show)
-
 -- | Abstract syntax of declarations.
 --
 --     decl  ::=  var : type
@@ -81,7 +82,7 @@ type Decl = (Var,Type)
 --
 --     prog  ::=  decl* `begin` stmt
 --
-data Prog = P [Decl] Stmt
+data Prog = P [Func] [Decl] Stmt
   deriving (Eq,Show)
 
 -- | Example good program: sum all of the numbers from 1 to 100.
@@ -96,26 +97,48 @@ data Prog = P [Decl] Stmt
 --         n := n + 1
 --       }
 --     }
--- >>> ex1 :: Prog
---  ex1 = P [("sum",TInt),("n",TInt)]
---      (Block [
---         Bind "sum" (Lit 0),
---         Bind "n" (Lit 1),
---         While (LTE (Ref "n") (Lit 100))
---         (Block [
---           Bind "sum" (Add (Ref "sum") (Ref "n")),
---           Bind "n" (Add (Ref "n") (Lit 1))
---         ])
---       ])
 
--- | Example bad program with a type error.
+ex1 :: Prog
+ex1 = P 
+      [] 
+
+      [("sum",TInt),("n",TInt)]
+      (Block [
+        Bind "sum" (Lit 0),
+        Bind "n" (Lit 1),
+        While (LTE (Ref "n") (Lit 100))
+        (Block [
+          Bind "sum" (Add (Ref "sum") (Ref "n")),
+          Bind "n" (Add (Ref "n") (Lit 1))
+        ])
+      ])
+
+ex3 :: Prog
+ex3 = P 
+      [F "square" [("return", TInt)] 
+      (Block [
+        Bind "return" (Mul (Ref "return") (Ref "return"))
+      ])] 
+
+      [("n",TInt)]
+      (Block [
+        Bind "n" (Lit 4),
+        Bind "n" (Call "square" ["n"])
+      ])
+
+-- | Example program with a type error.
+
 --
 --     x : int
 --     begin
 --       x := 3 <= 4
 --
--- ex2 :: Prog
--- P [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
+
+ex2 :: Prog
+ex2 = P 
+      [] 
+      
+      [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
 
 
 --
@@ -132,34 +155,34 @@ type Env a = Map Var a
 --   the names of variable references (last case). We use a Maybe to
 --   represent the fact that typing might fail, for example, if we get
 --   a type error or if a variable is not in the environment.
-typeExpr :: Expr -> Env Type -> Maybe Type
-typeExpr (Lit _)   _ = Just TInt
-typeExpr (Add l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TInt
-                         _                      -> Nothing
-typeExpr (Sub l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TInt
-                         _                      -> Nothing
-typeExpr (LTE l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TBool
-                         _                      -> Nothing
-typeExpr (GTE l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TBool
-                         _                      -> Nothing
-typeExpr (EQL l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TBool
-                         _                      -> Nothing
-typeExpr (LWR l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TBool
-                         _                      -> Nothing
-typeExpr (GTR l r) m = case (typeExpr l m, typeExpr r m) of
-                         (Just TInt, Just TInt) -> Just TBool
-                         _                      -> Nothing
-typeExpr (Not e)   m = case typeExpr e m of
-                         Just TBool -> Just TBool
-                         _          -> Nothing
-typeExpr (Ref v)   m = lookup v m
+typeExpr :: Expr -> [Func] -> Env Type -> Maybe Type
+typeExpr (Lit _)      _ _ = Just TInt
+typeExpr (Add l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TInt
+                            _                      -> Nothing
+typeExpr (Mul l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TInt
+                            _                      -> Nothing
+typeExpr (LTE l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TBool
+                            _                      -> Nothing
+typeExpr (Not e)      f m = case typeExpr e f m of
+                            Just TBool             -> Just TBool
+                            _                      -> Nothing
+typeExpr (Ref v)      f m = lookup v m
+typeExpr (Call r vs)  f m = case findFunc r f of
+                            Just (F _ ds s) -> case typeStmt s f mf of
+                              True -> lookup "return" (fromList ds)
+                              False -> Nothing
+                              where mf = case listConv (map (\t -> lookup t m) vs) of
+                                          Just tl  -> fromList (zipWith (\(a,b) c -> (a, c)) ds tl)
+                                          Nothing  -> error "intern"
+                            _                      -> Nothing
 
+-- data Func = F FName [Decl] Stmt
+--   deriving (Eq,Show)
+-- type Decl = (Var,Type)
+-- type Env a = Map Var a
 
 -- | Type checking statements. Note that the return type here is just a
 --   Boolean value since a statement doesn't have a type. The Boolean
@@ -175,24 +198,24 @@ typeExpr (Ref v)   m = lookup v m
 --   typing we would have to check the types in the loop body on each
 --   iteration, whereas with static typing we just check the loop body
 --   once.
-typeStmt :: Stmt -> Env Type -> Bool
-typeStmt (Bind v e)   m = case (lookup v m, typeExpr e m) of
+typeStmt :: Stmt -> [Func] -> Env Type -> Bool
+typeStmt (Bind v e)   f m = case (lookup v m, typeExpr e f m) of
                             (Just tv, Just te) -> tv == te
                             _ -> False
-typeStmt (If c st se) m = case typeExpr c m of
-                            Just TBool -> typeStmt st m && typeStmt se m
+typeStmt (If c st se) f m = case typeExpr c f m of
+                            Just TBool -> typeStmt st f m && typeStmt se f m
                             _ -> False
-typeStmt (While c sb) m = case typeExpr c m of
-                            Just TBool -> typeStmt sb m
+typeStmt (While c sb) f m = case typeExpr c f m of
+                            Just TBool -> typeStmt sb f m
                             _ -> False
-typeStmt (Block ss)   m = all (\s -> typeStmt s m) ss
+typeStmt (Block ss)   f m = all (\s -> typeStmt s f m) ss
 
 
 -- | Type checking programs. The 'fromList' function is from the
 --   Data.Map module. It builds a map from a list of pairs, thus
 --   initializing our typing environment.
 typeProg :: Prog -> Bool
-typeProg (P ds s) = typeStmt s (fromList ds)
+typeProg (P fs ds s) = typeStmt s fs (fromList ds)
 
 
 --
@@ -210,34 +233,66 @@ type Val = Either Int Bool
 --   Since expressions can refer to variables but not change them, the
 --   environment is read-only (i.e. it's an input but not an output of the
 --   function).
+evalExpr :: Expr -> [Func] -> Env Val -> Val
+evalExpr (Lit i)   _ _ = Left i
+evalExpr (Add l r) f m = Left (evalInt l f m + evalInt r f m)
+evalExpr (Mul l r) f m = Left (evalInt l f m * evalInt r f m)
+evalExpr (LTE l r) f m = Right (evalInt l f m <= evalInt r f m)
+evalExpr (Not e)   f m = Right (not (evalBool e f m))
+evalExpr (Ref x)   f m = case lookup x m of
 
 
-evalExpr :: Expr -> Env Val -> Val
-evalExpr (Lit i)   _ = Left i
-evalExpr (Add l r) m = Left (evalInt l m + evalInt r m)
-evalExpr (Sub l r) m = Left (evalInt l m + evalInt r m)
-evalExpr (LTE l r) m = Right (evalInt l m <= evalInt r m)
-evalExpr (GTE l r) m = Right (evalInt l m >= evalInt r m)
-evalExpr (EQL l r) m = Right (evalInt l m == evalInt r m)
-evalExpr (LWR l r) m = Right (evalInt l m < evalInt r m)
-evalExpr (GTR l r) m = Right (evalInt l m < evalInt r m)
-evalExpr (Not e)   m = Right (not (evalBool e m))
-evalExpr (Ref x)   m = case lookup x m of
+-- evalExpr :: Expr -> Env Val -> Val
+-- evalExpr (Lit i)   _ = Left i
+-- evalExpr (Add l r) m = Left (evalInt l m + evalInt r m)
+-- evalExpr (Sub l r) m = Left (evalInt l m + evalInt r m)
+-- evalExpr (LTE l r) m = Right (evalInt l m <= evalInt r m)
+-- evalExpr (GTE l r) m = Right (evalInt l m >= evalInt r m)
+-- evalExpr (EQL l r) m = Right (evalInt l m == evalInt r m)
+-- evalExpr (LWR l r) m = Right (evalInt l m < evalInt r m)
+-- evalExpr (GTR l r) m = Right (evalInt l m < evalInt r m)
+-- evalExpr (Not e)   m = Right (not (evalBool e m))
+-- evalExpr (Ref x)   m = case lookup x m of
                          Just v  -> v
                          Nothing -> error "internal error: undefined variable"
+evalExpr (Call r vs)  f m = evalFunc r vs f m
+
+
+findFunc :: FName -> [Func] -> Maybe Func
+findFunc n [] = Nothing
+findFunc n ((F n' ds s):nx) = if n == n'
+                              then Just (F n' ds s)
+                              else findFunc n nx
+
+listConv :: [Maybe a] -> Maybe [a]
+listConv [] = Just []
+listConv (Nothing:n) = Nothing
+listConv ((Just c):n) = case listConv n of
+                          Just vs -> Just (c:vs)
+                          Nothing -> Nothing
+
+evalFunc :: FName -> [Var] -> [Func] -> Env Val -> Val
+evalFunc fn vs f m = case findFunc fn f of
+                      Nothing -> error "internal error: function not defined"
+                      Just (F _ ds s) -> case lookup "return" (evalStmt s f mf) of
+                        Just r  -> r
+                        Nothing -> error "internal error: function 'return' var not defined"
+                        where mf = case listConv (map (\v -> lookup v m) vs) of
+                                    Just vl  -> fromList (zipWith (\(a,b) c -> (a, c)) ds vl)
+                                    Nothing  -> error "internal error: on function call, mismatch of referenced variables and function requirements" 
 
 -- | Helper function to evaluate an expression to an integer. Note that
 --   in all cases, we should only get an "internal error" if we try to
 --   evaluate an expression that didn't pass the static type checker we
 --   wrote above.
-evalInt :: Expr -> Env Val -> Int
-evalInt e m = case evalExpr e m of
+evalInt :: Expr -> [Func] -> Env Val -> Int
+evalInt e f m = case evalExpr e f m of
                 Left i  -> i
                 Right _ -> error "internal error: expected Int got Bool"
 
 -- | Helper function to evaluate an expression to a Boolean.
-evalBool :: Expr -> Env Val -> Bool
-evalBool e m = case evalExpr e m of
+evalBool :: Expr -> [Func] -> Env Val -> Bool
+evalBool e f m = case evalExpr e f m of
                  Right b -> b
                  Left _  -> error "internal error: expected Bool got Int"
 
@@ -245,27 +300,27 @@ evalBool e m = case evalExpr e m of
 --   environment, so the semantic domain is 'Env Val -> Env Val'. The
 --   bind case is the case that actually changes the environment. The
 --   other cases should look similar to other examples you've seen.
-evalStmt :: Stmt -> Env Val -> Env Val
-evalStmt (Bind x e)   m = insert x (evalExpr e m) m
-evalStmt (If c st se) m = if evalBool c m
-                          then evalStmt st m
-                          else evalStmt se m
-evalStmt (While c sb) m = if evalBool c m
-                          then evalStmt (While c sb) (evalStmt sb m)
+evalStmt :: Stmt -> [Func] -> Env Val -> Env Val
+evalStmt (Bind x e)   f m = insert x (evalExpr e f m) m
+evalStmt (If c st se) f m = if evalBool c f m
+                          then evalStmt st f m
+                          else evalStmt se f m
+evalStmt (While c sb) f m = if evalBool c f m
+                          then evalStmt (While c sb) f (evalStmt sb f m)
                           else m
-evalStmt (Block ss)   m = evalStmts ss m
+evalStmt (Block ss)   f m = evalStmts ss f m
 
 -- | Helper function to evaluate a list of statements. We could also
 --   have used 'foldl' here.
-evalStmts :: [Stmt] -> Env Val -> Env Val
-evalStmts []     m = m
-evalStmts (s:ss) m = evalStmts ss (evalStmt s m)
+evalStmts :: [Stmt] -> [Func] -> Env Val -> Env Val
+evalStmts []     f m = m
+evalStmts (s:ss) f m = evalStmts ss f (evalStmt s f m)
 
 -- | Semantics of programs. This runs a program with an initial
 --   environment where all integer variables are initialized to 0, and
 --   all Boolean variables are initialized to false.
 evalProg :: Prog -> Env Val
-evalProg (P ds s) = evalStmt s m
+evalProg (P fs ds s) = evalStmt s fs m
   where
     m = fromList (map (\(x,t) -> (x, init t)) ds)
     init TInt  = Left 0
