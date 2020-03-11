@@ -82,10 +82,7 @@ data Prog = P [Func] [Decl] Stmt
 --     }
 ex1 :: Prog
 ex1 = P 
-      [F "square" [("return", TInt)] 
-      (Block [
-        Bind "return" (Mul (Ref "return") (Ref "return"))
-      ])] 
+      [] 
 
       [("sum",TInt),("n",TInt)]
       (Block [
@@ -139,22 +136,33 @@ type Env a = Map Var a
 --   represent the fact that typing might fail, for example, if we get
 --   a type error or if a variable is not in the environment.
 typeExpr :: Expr -> [Func] -> Env Type -> Maybe Type
-typeExpr (Lit _)   _ _ = Just TInt
-typeExpr (Add l r) f m = case (typeExpr l f m, typeExpr r f m) of
-                         (Just TInt, Just TInt) -> Just TInt
-                         _                      -> Nothing
-typeExpr (Mul l r) f m = case (typeExpr l f m, typeExpr r f m) of
-                         (Just TInt, Just TInt) -> Just TInt
-                         _                      -> Nothing
-typeExpr (LTE l r) f m = case (typeExpr l f m, typeExpr r f m) of
-                         (Just TInt, Just TInt) -> Just TBool
-                         _                      -> Nothing
-typeExpr (Not e)   f m = case typeExpr e f m of
-                         Just TBool -> Just TBool
-                         _          -> Nothing
-typeExpr (Ref v)   f m = lookup v m
-typeExpr (Call r vs)  f m = Just TInt
+typeExpr (Lit _)      _ _ = Just TInt
+typeExpr (Add l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TInt
+                            _                      -> Nothing
+typeExpr (Mul l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TInt
+                            _                      -> Nothing
+typeExpr (LTE l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TBool
+                            _                      -> Nothing
+typeExpr (Not e)      f m = case typeExpr e f m of
+                            Just TBool             -> Just TBool
+                            _                      -> Nothing
+typeExpr (Ref v)      f m = lookup v m
+typeExpr (Call r vs)  f m = case findFunc r f of
+                            Just (F _ ds s) -> case typeStmt s f mf of
+                              True -> lookup "return" (fromList ds)
+                              False -> Nothing
+                              where mf = case listConv (map (\t -> lookup t m) vs) of
+                                          Just tl  -> fromList (zipWith (\(a,b) c -> (a, c)) ds tl)
+                                          Nothing  -> error "intern"
+                            _                      -> Nothing
 
+-- data Func = F FName [Decl] Stmt
+--   deriving (Eq,Show)
+-- type Decl = (Var,Type)
+-- type Env a = Map Var a
 
 -- | Type checking statements. Note that the return type here is just a
 --   Boolean value since a statement doesn't have a type. The Boolean
@@ -181,7 +189,6 @@ typeStmt (While c sb) f m = case typeExpr c f m of
                             Just TBool -> typeStmt sb f m
                             _ -> False
 typeStmt (Block ss)   f m = all (\s -> typeStmt s f m) ss
--- typeStmt (Call n vs)  f m = False
 
 
 -- | Type checking programs. The 'fromList' function is from the
@@ -217,32 +224,29 @@ evalExpr (Ref x)   f m = case lookup x m of
                          Nothing -> error "internal error: undefined variable"
 evalExpr (Call r vs)  f m = evalFunc r vs f m
 
--- data Func = F FName [Decl] Stmt
---   deriving (Eq,Show)
+
 findFunc :: FName -> [Func] -> Maybe Func
 findFunc n [] = Nothing
 findFunc n ((F n' ds s):nx) = if n == n'
                               then Just (F n' ds s)
                               else findFunc n nx
 
-listConv :: [Maybe Val] -> Maybe [Val]
+listConv :: [Maybe a] -> Maybe [a]
 listConv [] = Just []
 listConv (Nothing:n) = Nothing
 listConv ((Just c):n) = case listConv n of
                           Just vs -> Just (c:vs)
                           Nothing -> Nothing
 
--- type Decl = (Var,Type)
--- type Env a = Map Var a
 evalFunc :: FName -> [Var] -> [Func] -> Env Val -> Val
 evalFunc fn vs f m = case findFunc fn f of
                       Nothing -> error "internal error: function not defined"
                       Just (F _ ds s) -> case lookup "return" (evalStmt s f mf) of
-                        Just r -> r
+                        Just r  -> r
                         Nothing -> error "internal error: function 'return' var not defined"
                         where mf = case listConv (map (\v -> lookup v m) vs) of
                                     Just vl  -> fromList (zipWith (\(a,b) c -> (a, c)) ds vl)
-                                    Nothing  -> error "internal error: on function call" 
+                                    Nothing  -> error "internal error: on function call, mismatch of referenced variables and function requirements" 
 
 -- | Helper function to evaluate an expression to an integer. Note that
 --   in all cases, we should only get an "internal error" if we try to
