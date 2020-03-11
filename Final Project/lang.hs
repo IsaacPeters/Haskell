@@ -2,6 +2,7 @@ module Lang where
   
 import Data.Map (Map,fromList,lookup,insert)
 import Data.Maybe (fromJust)
+import Data.Char
 import Prelude hiding (lookup)
 
 
@@ -18,14 +19,20 @@ type FName = String
 --     expr  ::=  int
 --            |   expr + expr
 --            |   expr ≤ expr
+--            |   expr ≥ expr
 --            |   `not` expr
 --            |   var
 --            
 --
 data Expr = Lit Int        -- literal integer
           | Add Expr Expr  -- integer addition
-          | Mul Expr Expr  -- integer addition
+          | Mul Expr Expr 
+          | Sub Expr Expr
           | LTE Expr Expr  -- less than or equal to
+          | GTE Expr Expr  -- greater than or equal to
+          | EQL Expr Expr
+          | LWR Expr Expr
+          | GTR Expr Expr
           | Not Expr       -- boolean negation
           | Ref Var        -- variable reference
           | Call FName [Var] -- function call
@@ -46,6 +53,16 @@ data Stmt = Bind Var Expr
 
 -- | Abstract syntax of functions.
 data Func = F FName [Decl] Stmt
+
+-- | Abstract syntax of strings
+--
+--    str ::= string
+--          | string ++ string
+--          | toUpper string
+
+data Str = MyStr String
+          | Concat Str Str
+          | Upper Str
   deriving (Eq,Show)
 
 -- | Abstract syntax of types.
@@ -68,7 +85,7 @@ type Decl = (Var,Type)
 data Prog = P [Func] [Decl] Stmt
   deriving (Eq,Show)
 
--- | Example program: sum all of the numbers from 1 to 100.
+-- | Example good program: sum all of the numbers from 1 to 100.
 --
 --     sum : int
 --     n : int
@@ -80,6 +97,7 @@ data Prog = P [Func] [Decl] Stmt
 --         n := n + 1
 --       }
 --     }
+
 ex1 :: Prog
 ex1 = P 
       [] 
@@ -109,11 +127,13 @@ ex3 = P
       ])
 
 -- | Example program with a type error.
+
 --
 --     x : int
 --     begin
 --       x := 3 <= 4
 --
+
 ex2 :: Prog
 ex2 = P 
       [] 
@@ -220,6 +240,19 @@ evalExpr (Mul l r) f m = Left (evalInt l f m * evalInt r f m)
 evalExpr (LTE l r) f m = Right (evalInt l f m <= evalInt r f m)
 evalExpr (Not e)   f m = Right (not (evalBool e f m))
 evalExpr (Ref x)   f m = case lookup x m of
+
+
+-- evalExpr :: Expr -> Env Val -> Val
+-- evalExpr (Lit i)   _ = Left i
+-- evalExpr (Add l r) m = Left (evalInt l m + evalInt r m)
+-- evalExpr (Sub l r) m = Left (evalInt l m + evalInt r m)
+-- evalExpr (LTE l r) m = Right (evalInt l m <= evalInt r m)
+-- evalExpr (GTE l r) m = Right (evalInt l m >= evalInt r m)
+-- evalExpr (EQL l r) m = Right (evalInt l m == evalInt r m)
+-- evalExpr (LWR l r) m = Right (evalInt l m < evalInt r m)
+-- evalExpr (GTR l r) m = Right (evalInt l m < evalInt r m)
+-- evalExpr (Not e)   m = Right (not (evalBool e m))
+-- evalExpr (Ref x)   m = case lookup x m of
                          Just v  -> v
                          Nothing -> error "internal error: undefined variable"
 evalExpr (Call r vs)  f m = evalFunc r vs f m
@@ -297,3 +330,19 @@ evalProg (P fs ds s) = evalStmt s fs m
 runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
+
+-- Good examples for custom Str string data type
+myStr1 :: Str
+myStr1 = MyStr "hi world"
+
+myStr2 :: Str
+myStr2 = Concat (MyStr "hi ") (MyStr "world")
+
+myStr3 :: Str
+myStr3 = Upper (MyStr "hello")
+
+-- Semantics for using the Str data type
+evalString :: Str -> String
+evalString (MyStr s)      = s
+evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
+evalString (Upper s)      = map toUpper (evalString s)
