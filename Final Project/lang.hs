@@ -2,9 +2,9 @@
 module Lang where
   
 import Data.Map (Map,fromList,lookup,insert)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust) 
 import Data.Char
-import Prelude hiding (lookup)
+import Prelude hiding (lookup, Either, Left, Right)
 
 
 --
@@ -17,13 +17,17 @@ type Var = String
 -- | Abstract syntax of expressions.
 --
 --     expr  ::=  int
+--            |   string
 --            |   expr + expr
 --            |   expr ≤ expr
 --            |   expr ≥ expr
 --            |   `not` expr
 --            |   var
+--            |   expr ++ expr 
+--            |   map toUpper expr
 --
 data Expr = Lit Int        -- literal integer
+          | SLit String    -- literal string 
           | Add Expr Expr  -- integer addition
           | Sub Expr Expr
           | LTE Expr Expr  -- less than or equal to
@@ -33,6 +37,8 @@ data Expr = Lit Int        -- literal integer
           | GTR Expr Expr
           | Not Expr       -- boolean negation
           | Ref Var        -- variable reference
+          | Concat Expr Expr -- string concatenation
+          | Upper Expr        -- convert string to uppercase
   deriving (Eq,Show)
 
 -- | Abstract syntax of statements.
@@ -48,7 +54,6 @@ data Stmt = Bind Var Expr
           | Block [Stmt]
   deriving (Eq,Show)
 
-
 -- | Abstract syntax of lists
 -- 
 --    list ::= [type, type]
@@ -60,22 +65,11 @@ data List = MyList Mlist
             | Loop List
   deriving (Eq,Show)
 
--- | Abstract syntax of strings
---
---    str ::= string
---          | string ++ string
---          | toUpper string
-
-data Str = MyStr String
-          | Concat Str Str
-          | Upper Str
-  deriving (Eq,Show)
-
 -- | Abstract syntax of types.
 --     
---     type  ::=  `int`  |  `bool` | `list`
+--     type  ::=  `int`  |  `bool` | `list` | `string`
 --
-data Type = TInt | TBool | TList
+data Type = TInt | TBool | TList | TString
   deriving (Eq,Show)
 
 -- | Abstract syntax of functions. Work in progress -- Isaac
@@ -145,32 +139,35 @@ type Env a = Map Var a
 --   represent the fact that typing might fail, for example, if we get
 --   a type error or if a variable is not in the environment.
 typeExpr :: Expr -> Env Type -> Maybe Type
-typeExpr (Lit _)   _ = Just TInt
-typeExpr (Add l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (Lit _)      _ = Just TInt
+typeExpr (SLit _)     _ = Just TString
+typeExpr (Add l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TInt
                          _                      -> Nothing
-typeExpr (Sub l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (Sub l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TInt
                          _                      -> Nothing
-typeExpr (LTE l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (LTE l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
-typeExpr (GTE l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (GTE l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
-typeExpr (EQL l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (EQL l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
-typeExpr (LWR l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (LWR l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
-typeExpr (GTR l r) m = case (typeExpr l m, typeExpr r m) of
+typeExpr (GTR l r)    m = case (typeExpr l m, typeExpr r m) of
                          (Just TInt, Just TInt) -> Just TBool
                          _                      -> Nothing
-typeExpr (Not e)   m = case typeExpr e m of
+typeExpr (Not e)      m = case typeExpr e m of
                          Just TBool -> Just TBool
                          _          -> Nothing
-typeExpr (Ref v)   m = lookup v m
+typeExpr (Ref v)      m = lookup v m
+typeExpr (Concat l r) m = Just TString
+typeExpr (Upper s)    m = Just TString
 
 
 -- | Type checking statements. Note that the return type here is just a
@@ -211,9 +208,11 @@ typeProg (P ds s) = typeStmt s (fromList ds)
 -- * Semantics
 --
 
--- | The basic values in our language.
-type Val = Either Int Bool
 
+-- | The basic values in our language.
+data Either a b c = Left a | Center b | Right c
+
+type Val = Either Int String Bool
 -- | Semantics of type-correct expressions. Note that since we assume the
 --   expression is statically type correct (otherwise it would have failed
 --   type checking and we never try to evaluate it), we do not need to
@@ -288,21 +287,21 @@ runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
 
--- Good examples for custom Str string data type
-myStr1 :: Str
-myStr1 = MyStr "hi world"
+-- -- Good examples for custom Str string data type
+-- myStr1 :: Str
+-- myStr1 = MyStr "hi world"
 
-myStr2 :: Str
-myStr2 = Concat (MyStr "hi ") (MyStr "world")
+-- myStr2 :: Str
+-- myStr2 = Concat (MyStr "hi ") (MyStr "world")
 
-myStr3 :: Str
-myStr3 = Upper (MyStr "hello")
+-- myStr3 :: Str
+-- myStr3 = Upper (MyStr "hello")
 
--- Semantics for using the Str data type
-evalString :: Str -> String
-evalString (MyStr s)      = s
-evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
-evalString (Upper s)      = map toUpper (evalString s)
+-- -- Semantics for using the Str data type
+-- evalString :: Str -> String
+-- evalString (MyStr s)      = s
+-- evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
+-- evalString (Upper s)      = map toUpper (evalString s)
 
 evalList :: List -> Mlist
 evalList (Mylist l)       = l
