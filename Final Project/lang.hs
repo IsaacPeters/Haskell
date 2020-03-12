@@ -60,8 +60,8 @@ data Stmt = Bind Var Expr
 --          | list ++ list
 --          | loop list
 
-data List = MyList Mlist
-            | Concat List List
+data List = MyList [Val]
+            | Lconcat List List
             | Loop List
   deriving (Eq,Show)
 
@@ -169,6 +169,14 @@ typeExpr (Ref v)      m = lookup v m
 typeExpr (Concat l r) m = Just TString
 typeExpr (Upper s)    m = Just TString
 
+typeList :: List -> Env Type -> Maybe Type
+typeList (MyList l) _      = Just TList
+typeList (Lconcat l1 l2) m = case (typeList l1 m, typeList l2 m) of
+                              (Just TList, Just TList) -> Just TList
+                              _                        -> Nothing
+typeList (Loop l) m        = case (typeList l m) of
+                              (Just TList) -> Just TList
+                              _            -> Nothing
 
 -- | Type checking statements. Note that the return type here is just a
 --   Boolean value since a statement doesn't have a type. The Boolean
@@ -210,9 +218,10 @@ typeProg (P ds s) = typeStmt s (fromList ds)
 
 
 -- | The basic values in our language.
-data Either a b c = Left a | Center b | Right c
+data Either a b c d = Left a | Center b | Right c | End d
+  deriving (Eq,Show)
 
-type Val = Either Int String Bool
+type Val = Either Int String Bool List
 -- | Semantics of type-correct expressions. Note that since we assume the
 --   expression is statically type correct (otherwise it would have failed
 --   type checking and we never try to evaluate it), we do not need to
@@ -303,26 +312,27 @@ runProg p = if typeProg p then Just (evalProg p)
 -- evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
 -- evalString (Upper s)      = map toUpper (evalString s)
 
-evalList :: List -> Mlist
-evalList (Mylist l)       = l
-evalList (Concat l1 l2)   = (evalList l1) ++ (evalList l2)
+-- Semantics for using the List data type
+evalList :: List -> [Val]
+evalList (MyList l)       = l
+evalList (Lconcat l1 l2)   = (evalList l1) ++ (evalList l2)
 evalList (Loop l)         = (evalList l)
 
 -- Good examples for List data types
 myList1 :: List
-myList1 = MyList [1,2,3,4]
+myList1 = MyList [Left 1, Left 2, Left 3, Left 4]
 
 myList2 :: List
-myList2 = MyList [True, False, False]
+myList2 = MyList [Right True, Right False, Right False]
 
 myList3 :: List
-myList3 = MyList [MyStr "str1", MyStr "str2", MyStr "str3"]
+myList3 = MyList [Center ("str1"), Center ("str2"), Center ("str3")]
 
 myList4 :: List
-myList3 = Concat (MyList [1,2]) (MyList [3,4])
+myList4 = Lconcat (MyList [Left 1, Left 2]) (MyList [Left 3, Left 4])
 
 myList5 :: List
-myList4 = Loop (MyList [1,2,3,4])
+myList5 = Loop (MyList [Left 1, Left 2, Left 3, Left 4])
 
 listFind = undefined
 -- listFind :: [a] -> b -> Int
