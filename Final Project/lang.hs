@@ -26,13 +26,14 @@ type FName = String
 --
 data Expr = Lit Int        -- literal integer
           | Add Expr Expr  -- integer addition
-          | Mul Expr Expr 
-          | Sub Expr Expr
+          | Mul Expr Expr  -- integer multiplication
+          | Sub Expr Expr  -- integer subtraction
+          | Mod Expr Expr  -- integer modulo
           | LTE Expr Expr  -- less than or equal to
           | GTE Expr Expr  -- greater than or equal to
-          | EQL Expr Expr
-          | LWR Expr Expr
-          | GTR Expr Expr
+          | EQL Expr Expr  -- equal to
+          | LWR Expr Expr  -- less than
+          | GTR Expr Expr  -- greater than
           | Not Expr       -- boolean negation
           | Ref Var        -- variable reference
           | Call FName [Var] -- function call
@@ -53,6 +54,7 @@ data Stmt = Bind Var Expr
 
 -- | Abstract syntax of functions.
 data Func = F FName [Decl] Stmt
+  deriving (Eq,Show)
 
 -- | Abstract syntax of strings
 --
@@ -85,6 +87,16 @@ type Decl = (Var,Type)
 data Prog = P [Func] [Decl] Stmt
   deriving (Eq,Show)
 
+-- Good examples for custom Str string data type
+myStr1 :: Str
+myStr1 = MyStr "hi world"
+
+myStr2 :: Str
+myStr2 = Concat (MyStr "hi ") (MyStr "world")
+
+myStr3 :: Str
+myStr3 = Upper (MyStr "hello")
+
 -- | Example good program: sum all of the numbers from 1 to 100.
 --
 --     sum : int
@@ -113,8 +125,9 @@ ex1 = P
         ])
       ])
 
-ex3 :: Prog
-ex3 = P 
+-- | Example good program: tests the use of functions by defining the "square" function that squares an int
+ex2 :: Prog
+ex2 = P 
       [F "square" [("return", TInt)] 
       (Block [
         Bind "return" (Mul (Ref "return") (Ref "return"))
@@ -126,19 +139,52 @@ ex3 = P
         Bind "n" (Call "square" ["n"])
       ])
 
--- | Example program with a type error.
-
+-- | Example bad program: type error.
 --
 --     x : int
 --     begin
 --       x := 3 <= 4
 --
-
-ex2 :: Prog
-ex2 = P 
+ex3 :: Prog
+ex3 = P 
       [] 
       
       [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
+
+-- | Example program: Using strings.
+--
+-- ex4 :: Prog
+-- ex4 = P 
+--       [] 
+      
+--       [("x",Str)] (Bind "testStr" (Str "this is a test string"))
+      
+-- | Example good program: tests recursion on euclid's algorithm for greatest common denominator
+ex5 :: Prog
+ex5 = P 
+      [F "gcd" [("return", TInt), ("b", TInt)] 
+      (Block [
+        If (EQL (Ref "return") (Lit 0)) 
+        -- then
+        (Block[
+          Bind "return" (Ref "b")
+        ])
+        -- else
+        (Block[
+          Bind "b" (Mod (Ref "b") (Ref "a")),
+          Bind "return" (Call "gcd" ["b", "return"])
+        ])
+      ])] 
+
+      [("a",TInt), ("b", TInt), ("res1", TInt), ("res2", TInt)]
+      (Block [
+        Bind "a" (Lit 4),
+        Bind "b" (Lit 12),
+        Bind "res1" (Call "gcd" ["a", "b"]),
+        Bind "a" (Lit 12),
+        Bind "b" (Lit 36),
+        Bind "res2" (Call "gcd" ["a", "b"])
+      ])
 
 
 --
@@ -160,10 +206,28 @@ typeExpr (Lit _)      _ _ = Just TInt
 typeExpr (Add l r)    f m = case (typeExpr l f m, typeExpr r f m) of
                             (Just TInt, Just TInt) -> Just TInt
                             _                      -> Nothing
+typeExpr (Sub l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TInt
+                            _                      -> Nothing
+typeExpr (Mod l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TInt
+                            _                      -> Nothing
 typeExpr (Mul l r)    f m = case (typeExpr l f m, typeExpr r f m) of
                             (Just TInt, Just TInt) -> Just TInt
                             _                      -> Nothing
 typeExpr (LTE l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TBool
+                            _                      -> Nothing
+typeExpr (GTE l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TBool
+                            _                      -> Nothing
+typeExpr (EQL l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TBool
+                            _                      -> Nothing
+typeExpr (LWR l r)    f m = case (typeExpr l f m, typeExpr r f m) of
+                            (Just TInt, Just TInt) -> Just TBool
+                            _                      -> Nothing
+typeExpr (GTR l r)    f m = case (typeExpr l f m, typeExpr r f m) of
                             (Just TInt, Just TInt) -> Just TBool
                             _                      -> Nothing
 typeExpr (Not e)      f m = case typeExpr e f m of
@@ -176,9 +240,8 @@ typeExpr (Call r vs)  f m = case findFunc r f of
                               False -> Nothing
                               where mf = case listConv (map (\t -> lookup t m) vs) of
                                           Just tl  -> fromList (zipWith (\(a,b) c -> (a, c)) ds tl)
-                                          Nothing  -> error "intern"
+                                          Nothing  -> error "internal error: expected function parameters do not match entered parameters"
                             _                      -> Nothing
-
 -- data Func = F FName [Decl] Stmt
 --   deriving (Eq,Show)
 -- type Decl = (Var,Type)
@@ -236,23 +299,16 @@ type Val = Either Int Bool
 evalExpr :: Expr -> [Func] -> Env Val -> Val
 evalExpr (Lit i)   _ _ = Left i
 evalExpr (Add l r) f m = Left (evalInt l f m + evalInt r f m)
+evalExpr (Sub l r) f m = Left (evalInt l f m + evalInt r f m)
+evalExpr (Mod l r) f m = Left (mod (evalInt l f m) (evalInt r f m))
 evalExpr (Mul l r) f m = Left (evalInt l f m * evalInt r f m)
 evalExpr (LTE l r) f m = Right (evalInt l f m <= evalInt r f m)
+evalExpr (GTE l r) f m = Right (evalInt l f m >= evalInt r f m)
+evalExpr (EQL l r) f m = Right (evalInt l f m == evalInt r f m)
+evalExpr (LWR l r) f m = Right (evalInt l f m < evalInt r f m)
+evalExpr (GTR l r) f m = Right (evalInt l f m < evalInt r f m)
 evalExpr (Not e)   f m = Right (not (evalBool e f m))
 evalExpr (Ref x)   f m = case lookup x m of
-
-
--- evalExpr :: Expr -> Env Val -> Val
--- evalExpr (Lit i)   _ = Left i
--- evalExpr (Add l r) m = Left (evalInt l m + evalInt r m)
--- evalExpr (Sub l r) m = Left (evalInt l m + evalInt r m)
--- evalExpr (LTE l r) m = Right (evalInt l m <= evalInt r m)
--- evalExpr (GTE l r) m = Right (evalInt l m >= evalInt r m)
--- evalExpr (EQL l r) m = Right (evalInt l m == evalInt r m)
--- evalExpr (LWR l r) m = Right (evalInt l m < evalInt r m)
--- evalExpr (GTR l r) m = Right (evalInt l m < evalInt r m)
--- evalExpr (Not e)   m = Right (not (evalBool e m))
--- evalExpr (Ref x)   m = case lookup x m of
                          Just v  -> v
                          Nothing -> error "internal error: undefined variable"
 evalExpr (Call r vs)  f m = evalFunc r vs f m
@@ -330,16 +386,6 @@ evalProg (P fs ds s) = evalStmt s fs m
 runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
-
--- Good examples for custom Str string data type
-myStr1 :: Str
-myStr1 = MyStr "hi world"
-
-myStr2 :: Str
-myStr2 = Concat (MyStr "hi ") (MyStr "world")
-
-myStr3 :: Str
-myStr3 = Upper (MyStr "hello")
 
 -- Semantics for using the Str data type
 evalString :: Str -> String
