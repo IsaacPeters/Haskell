@@ -132,8 +132,10 @@ ex2 = P
         Bind "return" (Mul (Ref "return") (Ref "return"))
       ])] 
 
-      [("n",TInt)]
+      [("x",TInt), ("n",TInt)]
       (Block [
+        Bind "x" (Lit 3),
+        Bind "x" (Call "square" ["x"]),
         Bind "n" (Lit 4),
         Bind "n" (Call "square" ["n"])
       ])

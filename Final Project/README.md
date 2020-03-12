@@ -1,5 +1,4 @@
 Isaac Peters, 	ONID:petersis
-Dakota Cleeves,	ONID:cleevesd
 Claire Cahill,	ONID:cahillc
 Justin Parks,	ONID:parksju
 
@@ -17,6 +16,11 @@ Good Examples:
      runProg ex1
 
      expected output: Just (fromList [("n",Left 101),("sum",Left 5050)])
+
+    ex2, an example good program to demonstrate function calling. defines a "square" function and uses it to square 3 and 4
+     runProg ex2
+
+     expected output: Just (fromList [("n",Left 16),("x",Left 9)])
 
 Bad Examples
 * all expected outputs: Nothing
