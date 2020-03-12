@@ -48,6 +48,18 @@ data Stmt = Bind Var Expr
           | Block [Stmt]
   deriving (Eq,Show)
 
+
+-- | Abstract syntax of lists
+-- 
+--    list ::= [type, type]
+--          | list ++ list
+--          | loop list
+
+data List = MyList Mlist
+            | Concat List List
+            | Loop List
+  deriving (Eq,Show)
+
 -- | Abstract syntax of strings
 --
 --    str ::= string
@@ -61,9 +73,9 @@ data Str = MyStr String
 
 -- | Abstract syntax of types.
 --     
---     type  ::=  `int`  |  `bool`
+--     type  ::=  `int`  |  `bool` | `list`
 --
-data Type = TInt | TBool
+data Type = TInt | TBool | TList
   deriving (Eq,Show)
 
 -- | Abstract syntax of functions. Work in progress -- Isaac
@@ -292,18 +304,42 @@ evalString (MyStr s)      = s
 evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
 evalString (Upper s)      = map toUpper (evalString s)
 
+evalList :: List -> Mlist
+evalList (Mylist l)       = l
+evalList (Concat l1 l2)   = (evalList l1) ++ (evalList l2)
+evalList (Loop l)         = (evalList l)
 
--- listFind = undefined
-listFind :: [a] -> b -> Int
-listFind (s:ss) b =   if s == b then
-                       0
-                      else 1 + (listFind ss b)
-listFind [] b = -1
+-- Good examples for List data types
+myList1 :: List
+myList1 = MyList [1,2,3,4]
 
--- listCount = undefined
-listCount :: [a] -> b -> Int
-listCount(s:ss) b =  if s == b then
-                       1 + (listCount ss b)
-                     else 0 + (listCount ss b)
-listCount [] b = 0
-listCount _ b = -1 
+myList2 :: List
+myList2 = MyList [True, False, False]
+
+myList3 :: List
+myList3 = MyList [MyStr "str1", MyStr "str2", MyStr "str3"]
+
+myList4 :: List
+myList3 = Concat (MyList [1,2]) (MyList [3,4])
+
+myList5 :: List
+myList4 = Loop (MyList [1,2,3,4])
+
+listFind = undefined
+-- listFind :: [a] -> b -> Int
+-- listFind (s:ss) b = case s of
+--                       b -> 0
+--                       _ -> 1 + (listFind ss b)
+-- listFind [] b = -1
+-- listFind (s:ss) b =   if s == b then
+--                         0
+--                       else 1 + (listFind ss b)
+-- listFind [] b = -1
+
+listCount = undefined
+-- listCount :: [a] -> b -> Int
+-- listCount(s:ss) b = if s == b then
+--                       1 + (listCount ss b)
+--                     else 0 + (listCount ss b)
+-- listCount [] b = 0
+-- listCount _ b = -1 
