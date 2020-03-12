@@ -291,3 +291,19 @@ evalString :: Str -> String
 evalString (MyStr s)      = s
 evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
 evalString (Upper s)      = map toUpper (evalString s)
+
+
+-- listFind = undefined
+listFind :: [a] -> b -> Int
+listFind (s:ss) b =   if s == b then
+                       0
+                      else 1 + (listFind ss b)
+listFind [] b = -1
+
+-- listCount = undefined
+listCount :: [a] -> b -> Int
+listCount(s:ss) b =  if s == b then
+                       1 + (listCount ss b)
+                     else 0 + (listCount ss b)
+listCount [] b = 0
+listCount _ b = -1 
