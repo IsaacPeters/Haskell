@@ -109,7 +109,6 @@ myStr3 = Upper (MyStr "hello")
 --         n := n + 1
 --       }
 --     }
-
 ex1 :: Prog
 ex1 = P 
       [] 
@@ -133,8 +132,10 @@ ex2 = P
         Bind "return" (Mul (Ref "return") (Ref "return"))
       ])] 
 
-      [("n",TInt)]
+      [("x",TInt), ("n",TInt)]
       (Block [
+        Bind "x" (Lit 3),
+        Bind "x" (Call "square" ["x"]),
         Bind "n" (Lit 4),
         Bind "n" (Call "square" ["n"])
       ])
