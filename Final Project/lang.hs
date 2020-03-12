@@ -59,10 +59,12 @@ data Stmt = Bind Var Expr
 --    list ::= [type, type]
 --          | list ++ list
 --          | loop list
+--          | Index list Int
 
 data List = MyList [Val]
             | Lconcat List List
             | Loop List
+            -- | Index List Int
   deriving (Eq,Show)
 
 -- | Abstract syntax of types.
@@ -169,12 +171,17 @@ typeExpr (Ref v)      m = lookup v m
 typeExpr (Concat l r) m = Just TString
 typeExpr (Upper s)    m = Just TString
 
+-- | Type checking Lists. The return type here is a maybe type since the Lists 
+--   SHOULD evaluate to TList, which is a Type. A List shouldn't evaluate to 
+--   anything other than a TList type, so we return either a Just TList or Nothing
+--   if it evaluates to anything other than Just TList.
+
 typeList :: List -> Env Type -> Maybe Type
-typeList (MyList l) _      = Just TList
+typeList (MyList l)      _ = Just TList
 typeList (Lconcat l1 l2) m = case (typeList l1 m, typeList l2 m) of
                               (Just TList, Just TList) -> Just TList
                               _                        -> Nothing
-typeList (Loop l) m        = case (typeList l m) of
+typeList (Loop l)        m = case (typeList l m) of
                               (Just TList) -> Just TList
                               _            -> Nothing
 
@@ -261,6 +268,12 @@ evalBool e m = case evalExpr e m of
                  Right b -> b
                  Left _  -> error "internal error: expected Bool got Int"
 
+-- | Semantics for using the List data type
+evalList :: List -> [Val]
+evalList (MyList l)       = l
+evalList (Lconcat l1 l2)  = (evalList l1) ++ (evalList l2)
+evalList (Loop l)         = (evalList l)
+
 -- | Semantics of statements. Statements update the bindings in the
 --   environment, so the semantic domain is 'Env Val -> Env Val'. The
 --   bind case is the case that actually changes the environment. The
@@ -312,12 +325,6 @@ runProg p = if typeProg p then Just (evalProg p)
 -- evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
 -- evalString (Upper s)      = map toUpper (evalString s)
 
--- Semantics for using the List data type
-evalList :: List -> [Val]
-evalList (MyList l)       = l
-evalList (Lconcat l1 l2)   = (evalList l1) ++ (evalList l2)
-evalList (Loop l)         = (evalList l)
-
 -- Good examples for List data types
 myList1 :: List
 myList1 = MyList [Left 1, Left 2, Left 3, Left 4]
@@ -333,22 +340,3 @@ myList4 = Lconcat (MyList [Left 1, Left 2]) (MyList [Left 3, Left 4])
 
 myList5 :: List
 myList5 = Loop (MyList [Left 1, Left 2, Left 3, Left 4])
-
-listFind = undefined
--- listFind :: [a] -> b -> Int
--- listFind (s:ss) b = case s of
---                       b -> 0
---                       _ -> 1 + (listFind ss b)
--- listFind [] b = -1
--- listFind (s:ss) b =   if s == b then
---                         0
---                       else 1 + (listFind ss b)
--- listFind [] b = -1
-
-listCount = undefined
--- listCount :: [a] -> b -> Int
--- listCount(s:ss) b = if s == b then
---                       1 + (listCount ss b)
---                     else 0 + (listCount ss b)
--- listCount [] b = 0
--- listCount _ b = -1 
