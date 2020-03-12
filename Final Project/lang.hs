@@ -91,8 +91,9 @@ data Prog = P [Decl] Stmt
 --         n := n + 1
 --       }
 --     }
--- >>> ex1 :: Prog
---  ex1 = P [("sum",TInt),("n",TInt)]
+
+-- ex1 :: Prog
+-- ex1 = P [("sum",TInt),("n",TInt)]
 --      (Block [
 --         Bind "sum" (Lit 0),
 --         Bind "n" (Lit 1),
@@ -102,6 +103,9 @@ data Prog = P [Decl] Stmt
 --           Bind "n" (Add (Ref "n") (Lit 1))
 --         ])
 --       ])
+
+ex3 :: Prog
+ex3 = P [("upper", TString)] (Bind "upper" (Upper (SLit "uppercase")))
 
 -- | Example bad program with a type error.
 --
@@ -155,8 +159,12 @@ typeExpr (Not e)      m = case typeExpr e m of
                          Just TBool -> Just TBool
                          _          -> Nothing
 typeExpr (Ref v)      m = lookup v m
-typeExpr (Concat l r) m = Just TString
-typeExpr (Upper s)    m = Just TString
+typeExpr (Concat l r) m = case (typeExpr l m, typeExpr r m) of
+                          (Just TString, Just TString) -> Just TString
+                          _                           -> Nothing
+typeExpr (Upper e)    m = case typeExpr e m of
+                          Just TString -> Just TString
+                          _            -> Nothing
 
 
 -- | Type checking statements. Note that the return type here is just a
@@ -200,6 +208,8 @@ typeProg (P ds s) = typeStmt s (fromList ds)
 
 -- | The basic values in our language.
 data Either a b c = Left a | Center b | Right c
+  deriving (Eq,Show)
+
 
 type Val = Either Int String Bool
 -- | Semantics of type-correct expressions. Note that since we assume the
@@ -213,18 +223,21 @@ type Val = Either Int String Bool
 
 
 evalExpr :: Expr -> Env Val -> Val
-evalExpr (Lit i)   _ = Left i
-evalExpr (Add l r) m = Left (evalInt l m + evalInt r m)
-evalExpr (Sub l r) m = Left (evalInt l m + evalInt r m)
-evalExpr (LTE l r) m = Right (evalInt l m <= evalInt r m)
-evalExpr (GTE l r) m = Right (evalInt l m >= evalInt r m)
-evalExpr (EQL l r) m = Right (evalInt l m == evalInt r m)
-evalExpr (LWR l r) m = Right (evalInt l m < evalInt r m)
-evalExpr (GTR l r) m = Right (evalInt l m < evalInt r m)
-evalExpr (Not e)   m = Right (not (evalBool e m))
-evalExpr (Ref x)   m = case lookup x m of
+evalExpr (Lit i)      _ = Left i
+evalExpr (SLit s)     _ = Center s
+evalExpr (Add l r)    m = Left (evalInt l m + evalInt r m)
+evalExpr (Sub l r)    m = Left (evalInt l m + evalInt r m)
+evalExpr (LTE l r)    m = Right (evalInt l m <= evalInt r m)
+evalExpr (GTE l r)    m = Right (evalInt l m >= evalInt r m)
+evalExpr (EQL l r)    m = Right (evalInt l m == evalInt r m)
+evalExpr (LWR l r)    m = Right (evalInt l m < evalInt r m)
+evalExpr (GTR l r)    m = Right (evalInt l m < evalInt r m)
+evalExpr (Not e)      m = Right (not (evalBool e m))
+evalExpr (Ref x)      m = case lookup x m of
                          Just v  -> v
                          Nothing -> error "internal error: undefined variable"
+evalExpr (Concat l r) m = Center (evalString l m ++ evalString r m)
+evalExpr (Upper s)    m = Center (map toUpper (evalString s m))
 
 -- | Helper function to evaluate an expression to an integer. Note that
 --   in all cases, we should only get an "internal error" if we try to
@@ -232,14 +245,23 @@ evalExpr (Ref x)   m = case lookup x m of
 --   wrote above.
 evalInt :: Expr -> Env Val -> Int
 evalInt e m = case evalExpr e m of
-                Left i  -> i
-                Right _ -> error "internal error: expected Int got Bool"
+                Left   i  -> i
+                Right  _ -> error "internal error: expected Int got Bool"
+                Center _ -> error "internal error: expected Int got String"
 
 -- | Helper function to evaluate an expression to a Boolean.
 evalBool :: Expr -> Env Val -> Bool
 evalBool e m = case evalExpr e m of
-                 Right b -> b
-                 Left _  -> error "internal error: expected Bool got Int"
+                 Right  b -> b
+                 Left   _  -> error "internal error: expected Bool got Int"
+                 Center _ -> error "internal error: expected Int got String"
+
+-- | Helper function to evaluate an expression to a String.
+evalString :: Expr -> Env Val -> String
+evalString e m = case evalExpr e m of
+                 Center s -> s
+                 Left   _  -> error "internal error: expected String got Int"
+                 Right  _ -> error "internal error: expected String got Bool"
 
 -- | Semantics of statements. Statements update the bindings in the
 --   environment, so the semantic domain is 'Env Val -> Env Val'. The
@@ -268,26 +290,11 @@ evalProg :: Prog -> Env Val
 evalProg (P ds s) = evalStmt s m
   where
     m = fromList (map (\(x,t) -> (x, init t)) ds)
-    init TInt  = Left 0
-    init TBool = Right False
+    init TInt     = Left 0
+    init TBool    = Right False
+    init TString  = Center ""
 
 -- | Type check and then run a program.
 runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
-
--- -- Good examples for custom Str string data type
--- myStr1 :: Str
--- myStr1 = MyStr "hi world"
-
--- myStr2 :: Str
--- myStr2 = Concat (MyStr "hi ") (MyStr "world")
-
--- myStr3 :: Str
--- myStr3 = Upper (MyStr "hello")
-
--- -- Semantics for using the Str data type
--- evalString :: Str -> String
--- evalString (MyStr s)      = s
--- evalString (Concat s1 s2) = (evalString s1) ++ (evalString s2)
--- evalString (Upper s)      = map toUpper (evalString s)
