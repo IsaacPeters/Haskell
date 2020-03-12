@@ -109,7 +109,6 @@ myStr3 = Upper (MyStr "hello")
 --         n := n + 1
 --       }
 --     }
-
 ex1 :: Prog
 ex1 = P 
       [] 

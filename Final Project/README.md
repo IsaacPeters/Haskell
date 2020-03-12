@@ -4,6 +4,25 @@ Claire Cahill,	ONID:cahillc
 Justin Parks,	ONID:parksju
 
 
-Our lanuage is called NSTM which is short for Names Suck To Make. The language paradigm we choose is imperative. NSTM is meant to be run on GHCi and you will want to load the Lang module. 
+Our language is a statically typed imperative programming language. We chose an imperative language since we wanted the execution order and structure of our program to be clear to users; things happen from top to bottom in the order that the user entered the expressions (with the exception of functions and while loops that can repeat a set of expressions in any location). We chose a statically typed language, which checks over the entered program to type check before any execution, so that we’d have the advantage of only having to evaluate loops/functions once even if they are executed multiple times, theoretically making our language faster to run. 
 
-This language includes Expressions, Statements, Lists, and a custom Str data type to represent strings. However, the basic data types in our language are Int and Bool. Expressions include addition, less than or equal to conditionals, negation, and variable reference. There is a helper function for expressions that looks at the arguments and varifies whether it is supposed to be an integer or boolean value, and if the type fails it returns an error. There is a similar type checking function for statements. Statements include binding a variable to an expression, if statements, while loops, and executing a block of statements. The Prog data type is supposed to resemble a program, since it takes a group of declarations and executes a statement on them. Lists have associated functions listCount and listFind, which return integers that show the number of given elements in the list and the first position of the given element, respectively. Errors for these functions are both -1, for simplicity's sake. 
+Running instructions: 
+1. open ghci
+2. load lang.hs (:l lang.hs)
+3. run our test programs, using the following commands
+
+Good Examples: 
+
+    ex1, an example good program to sum all numbers 1 to 100:
+     runProg ex1
+
+     expected output: Just (fromList [("n",Left 101),("sum",Left 5050)])
+
+Bad Examples
+* all expected outputs: Nothing
+
+    ex3, a type error example
+     runProg ex3
+    
+    ex5, an example of trying to run a recursive function (doesn't work)
+     runProg ex5
