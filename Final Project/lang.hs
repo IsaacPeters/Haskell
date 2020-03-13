@@ -105,36 +105,36 @@ data Prog = P [Decl] Stmt
 --       }
 --     }
 
-ex1 :: Prog
-ex1 = P 
-      [] 
+-- ex1 :: Prog
+-- ex1 = P 
+--       [] 
 
-      [("sum",TInt),("n",TInt)]
-      (Block [
-        Bind "sum" (Lit 0),
-        Bind "n" (Lit 1),
-        While (LTE (Ref "n") (Lit 100))
-        (Block [
-          Bind "sum" (Add (Ref "sum") (Ref "n")),
-          Bind "n" (Add (Ref "n") (Lit 1))
-        ])
-      ])
+--       [("sum",TInt),("n",TInt)]
+--       (Block [
+--         Bind "sum" (Lit 0),
+--         Bind "n" (Lit 1),
+--         While (LTE (Ref "n") (Lit 100))
+--         (Block [
+--           Bind "sum" (Add (Ref "sum") (Ref "n")),
+--           Bind "n" (Add (Ref "n") (Lit 1))
+--         ])
+--       ])
 
 -- | Example good program: tests the use of functions by defining the "square" function that squares an int
-ex2 :: Prog
-ex2 = P 
-      [F "square" [("return", TInt)] 
-      (Block [
-        Bind "return" (Mul (Ref "return") (Ref "return"))
-      ])] 
+-- ex2 :: Prog
+-- ex2 = P 
+--       [P "square" [("return", TInt)] 
+--       (Block [
+--         Bind "return" (Mul (Ref "return") (Ref "return"))
+--       ])] 
 
-      [("x",TInt), ("n",TInt)]
-      (Block [
-        Bind "x" (Lit 3),
-        Bind "x" (Call "square" ["x"]),
-        Bind "n" (Lit 4),
-        Bind "n" (Call "square" ["n"])
-      ])
+--       [("x",TInt), ("n",TInt)]
+--       (Block [
+--         Bind "x" (Lit 3),
+--         Bind "x" (Call "square" ["x"]),
+--         Bind "n" (Lit 4),
+--         Bind "n" (Call "square" ["n"])
+--       ])
 
 -- | Example bad program: type error.
 --
@@ -142,13 +142,22 @@ ex2 = P
 --     begin
 --       x := 3 <= 4
 --
--- ex2 :: Prog
+-- ex3 :: Prog
 -- P [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
 
 
-ex3 :: Prog
-ex3 = P [("upper", TString)] (Bind "upper" (Upper (SLit "uppercase")))
+-- | Example of a program using custom string variable type
+ex4 :: Prog
+ex4 = P [("upper", TString)] (Bind "upper" (Upper (SLit "uppercase")))
 
+-- | Example of a bad string where an integer is provided instead of a string
+-- ex6 :: Prog
+-- ex6 = P [("badInt", TString)] (Bind "badInt" (Concat (SLit 4) (SLit "thisWontWork")))
+
+
+-- | Example of a program using custom string variable type
+ex7 :: Prog
+ex7 = P [("longString", TString)] (Bind "longString" (Concat (SLit "functional programming") (SLit " is awesome")))
 
 --
 -- * Type system
