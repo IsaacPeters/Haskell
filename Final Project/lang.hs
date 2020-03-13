@@ -54,11 +54,24 @@ data Stmt = Bind Var Expr
           | Block [Stmt]
   deriving (Eq,Show)
 
+-- | Abstract syntax of lists
+-- 
+--    list ::= [type, type]
+--          | list ++ list
+--          | loop list
+--          | Index list Int
+
+data List = MyList [Val]
+            | Lconcat List List
+            | Loop List
+            -- | Index List Int
+  deriving (Eq,Show)
+
 -- | Abstract syntax of types.
 --     
---     type  ::=  `int`  |  `bool` | `string`
+--     type  ::=  `int`  |  `bool` | `list` | `string`
 --
-data Type = TInt | TBool | TString
+data Type = TInt | TBool | TList | TString
   deriving (Eq,Show)
 
 -- | Abstract syntax of functions. Work in progress -- Isaac
@@ -92,22 +105,38 @@ data Prog = P [Decl] Stmt
 --       }
 --     }
 
--- ex1 :: Prog
--- ex1 = P [("sum",TInt),("n",TInt)]
---      (Block [
---         Bind "sum" (Lit 0),
---         Bind "n" (Lit 1),
---         While (LTE (Ref "n") (Lit 100))
---         (Block [
---           Bind "sum" (Add (Ref "sum") (Ref "n")),
---           Bind "n" (Add (Ref "n") (Lit 1))
---         ])
---       ])
+ex1 :: Prog
+ex1 = P 
+      [] 
 
-ex3 :: Prog
-ex3 = P [("upper", TString)] (Bind "upper" (Upper (SLit "uppercase")))
+      [("sum",TInt),("n",TInt)]
+      (Block [
+        Bind "sum" (Lit 0),
+        Bind "n" (Lit 1),
+        While (LTE (Ref "n") (Lit 100))
+        (Block [
+          Bind "sum" (Add (Ref "sum") (Ref "n")),
+          Bind "n" (Add (Ref "n") (Lit 1))
+        ])
+      ])
 
--- | Example bad program with a type error.
+-- | Example good program: tests the use of functions by defining the "square" function that squares an int
+ex2 :: Prog
+ex2 = P 
+      [F "square" [("return", TInt)] 
+      (Block [
+        Bind "return" (Mul (Ref "return") (Ref "return"))
+      ])] 
+
+      [("x",TInt), ("n",TInt)]
+      (Block [
+        Bind "x" (Lit 3),
+        Bind "x" (Call "square" ["x"]),
+        Bind "n" (Lit 4),
+        Bind "n" (Call "square" ["n"])
+      ])
+
+-- | Example bad program: type error.
 --
 --     x : int
 --     begin
@@ -115,6 +144,10 @@ ex3 = P [("upper", TString)] (Bind "upper" (Upper (SLit "uppercase")))
 --
 -- ex2 :: Prog
 -- P [("x",TInt)] (Bind "x" (LTE (Lit 3) (Lit 4)))
+
+
+ex3 :: Prog
+ex3 = P [("upper", TString)] (Bind "upper" (Upper (SLit "uppercase")))
 
 
 --
@@ -166,6 +199,19 @@ typeExpr (Upper e)    m = case typeExpr e m of
                           Just TString -> Just TString
                           _            -> Nothing
 
+-- | Type checking Lists. The return type here is a maybe type since the Lists 
+--   SHOULD evaluate to TList, which is a Type. A List shouldn't evaluate to 
+--   anything other than a TList type, so we return either a Just TList or Nothing
+--   if it evaluates to anything other than Just TList.
+
+typeList :: List -> Env Type -> Maybe Type
+typeList (MyList l)      _ = Just TList
+typeList (Lconcat l1 l2) m = case (typeList l1 m, typeList l2 m) of
+                              (Just TList, Just TList) -> Just TList
+                              _                        -> Nothing
+typeList (Loop l)        m = case (typeList l m) of
+                              (Just TList) -> Just TList
+                              _            -> Nothing
 
 -- | Type checking statements. Note that the return type here is just a
 --   Boolean value since a statement doesn't have a type. The Boolean
@@ -207,11 +253,10 @@ typeProg (P ds s) = typeStmt s (fromList ds)
 
 
 -- | The basic values in our language.
-data Either a b c = Left a | Center b | Right c
+data Either a b c d = Left a | Center b | Right c | End d
   deriving (Eq,Show)
 
-
-type Val = Either Int String Bool
+type Val = Either Int String Bool List
 -- | Semantics of type-correct expressions. Note that since we assume the
 --   expression is statically type correct (otherwise it would have failed
 --   type checking and we never try to evaluate it), we do not need to
@@ -263,6 +308,12 @@ evalString e m = case evalExpr e m of
                  Left   _  -> error "internal error: expected String got Int"
                  Right  _ -> error "internal error: expected String got Bool"
 
+-- | Semantics for using the List data type
+evalList :: List -> [Val]
+evalList (MyList l)       = l
+evalList (Lconcat l1 l2)  = (evalList l1) ++ (evalList l2)
+evalList (Loop l)         = (evalList l)
+
 -- | Semantics of statements. Statements update the bindings in the
 --   environment, so the semantic domain is 'Env Val -> Env Val'. The
 --   bind case is the case that actually changes the environment. The
@@ -298,3 +349,20 @@ evalProg (P ds s) = evalStmt s m
 runProg :: Prog -> Maybe (Env Val)
 runProg p = if typeProg p then Just (evalProg p)
                           else Nothing
+
+
+-- Good examples for List data types
+myList1 :: List
+myList1 = MyList [Left 1, Left 2, Left 3, Left 4]
+
+myList2 :: List
+myList2 = MyList [Right True, Right False, Right False]
+
+myList3 :: List
+myList3 = MyList [Center ("str1"), Center ("str2"), Center ("str3")]
+
+myList4 :: List
+myList4 = Lconcat (MyList [Left 1, Left 2]) (MyList [Left 3, Left 4])
+
+myList5 :: List
+myList5 = Loop (MyList [Left 1, Left 2, Left 3, Left 4])
