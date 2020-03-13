@@ -104,19 +104,39 @@ data Prog = P [Decl] Stmt
 --         n := n + 1
 --       }
 --     }
--- >>> ex1 :: Prog
---  ex1 = P [("sum",TInt),("n",TInt)]
---      (Block [
---         Bind "sum" (Lit 0),
---         Bind "n" (Lit 1),
---         While (LTE (Ref "n") (Lit 100))
---         (Block [
---           Bind "sum" (Add (Ref "sum") (Ref "n")),
---           Bind "n" (Add (Ref "n") (Lit 1))
---         ])
---       ])
 
--- | Example bad program with a type error.
+ex1 :: Prog
+ex1 = P 
+      [] 
+
+      [("sum",TInt),("n",TInt)]
+      (Block [
+        Bind "sum" (Lit 0),
+        Bind "n" (Lit 1),
+        While (LTE (Ref "n") (Lit 100))
+        (Block [
+          Bind "sum" (Add (Ref "sum") (Ref "n")),
+          Bind "n" (Add (Ref "n") (Lit 1))
+        ])
+      ])
+
+-- | Example good program: tests the use of functions by defining the "square" function that squares an int
+ex2 :: Prog
+ex2 = P 
+      [F "square" [("return", TInt)] 
+      (Block [
+        Bind "return" (Mul (Ref "return") (Ref "return"))
+      ])] 
+
+      [("x",TInt), ("n",TInt)]
+      (Block [
+        Bind "x" (Lit 3),
+        Bind "x" (Call "square" ["x"]),
+        Bind "n" (Lit 4),
+        Bind "n" (Call "square" ["n"])
+      ])
+
+-- | Example bad program: type error.
 --
 --     x : int
 --     begin
