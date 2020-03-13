@@ -22,6 +22,16 @@ Good Examples:
 
      expected output: Just (fromList [("n",Left 16),("x",Left 9)])
 
+     ex4, an example of a good program to demonstrate functionality on custom string functions. It uses the Upper constructor to convert the word "uppercase" to all uppercase letters
+        runProg ex4
+
+        expected output: Just (fromList [("upper",Center "UPPERCASE")])
+
+    ex7, an example of a good program that concatenates 2 strings
+        runProg ex7
+
+        expected output: Just (fromList [("longString",Center "functional programming is awesome")])
+
 Bad Examples
 * all expected outputs: Nothing
 
@@ -30,3 +40,6 @@ Bad Examples
     
     ex5, an example of trying to run a recursive function (doesn't work)
      runProg ex5
+
+    ex6, a type error example on string functionality
+     runProg ex6
